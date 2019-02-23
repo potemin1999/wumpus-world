@@ -40,9 +40,9 @@ Wumpus World
  * entering cell with dead wumpus
 
 ### Points
- +1000 for winning
- -1 for each action
- -10000 for getting killed
+ * +1000 for winning
+ * -1 for each action
+ * -10000 for getting killed
 
 
 
