@@ -8,10 +8,13 @@ Wumpus World
  * Only one **wumpus** are located somewhere on field
 
 ### Objects 
-  Agent (actor, player) - only movable object in game
-  Pit
-  Wumpus
-  Gold
+ Agent (actor, player) - only movable object in game
+
+ Pit
+ 
+ Wumpus
+ 
+ Gold
  
 ### Perception
  * Cell containing wumpus and 4 directly adjacent makes agent perceive **stench**
@@ -31,7 +34,8 @@ Wumpus World
 
 ### Game endings
  Win is achieved by getting a gold and leaving cave alive
- Fail is achieved by:
+
+ Fail can be achieved by:
  * moving into a cell with pit
  * entering cell with dead wumpus
 
