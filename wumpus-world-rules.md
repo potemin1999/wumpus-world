@@ -37,7 +37,7 @@ Wumpus World
 
  Fail can be achieved by:
  * moving into a cell with pit
- * entering cell with dead wumpus
+ * entering cell with live wumpus
 
 ### Points
  * +1000 for winning
