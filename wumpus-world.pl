@@ -33,8 +33,7 @@ get_world_size(Width,Height) :-
     world(Width,Height,_),
     true.
 
-dump_world :-
-    world(Width, Height, Map),
+dump_world([Width,Height,Map]) :-
     write("World: "), write(Width), write("x"), writeln(Height),
     write("World map: "), writeln(Map).
 
@@ -94,8 +93,7 @@ set_player_is_dead(IsDead) :-
 get_player_is_dead(IsDead) :-
     player(_,_,_,_,_,IsDead).
 
-dump_player :-
-    player(X, Y, Heading, ArrowCount, GoldCount, IsDead),
+dump_player([X, Y, Heading, ArrowCount, GoldCount, IsDead]) :-
     heading_to_string(Heading, HeadingString),
     write("Player at "), write(X), write(":"), write(Y),
     write(", heading "), write(HeadingString), write(", dead:"), write(IsDead),
@@ -165,6 +163,7 @@ replace(L,  _,  _,  L).
  */
 
 %world_cell(+World, +X, +Y, -Value)
+world_cell([], _,_,_) :- false.
 
 world_cell([X:Y-Value|_], X, Y, Value).
 
@@ -194,26 +193,27 @@ turn_ccw(A, B) :-
 
 %cell_contains_something(+World, +X, +Y)
 
-cell_contains_gold(World, X, Y) :- 
-    world_cell(World, X, Y, gold).
+cell_contains_gold(WorldMap, X, Y) :- 
+    world_cell(WorldMap, X, Y, gold).
 
-cell_contains_pit(World, X, Y) :- 
-    world_cell(World, X, Y, pit).
+cell_contains_pit(WorldMap, X, Y) :- 
+    world_cell(WorldMap, X, Y, pit).
 
-cell_contains_wumpus(World, X, Y) :- 
-    world_cell(World, X, Y, wumpus).
+cell_contains_wumpus(WorldMap, X, Y) :- 
+    world_cell(WorldMap, X, Y, wumpus).
 
-cell_contains_player(World, X, Y) :- 
-    world_cell(World, X, Y, player).
+cell_contains_player(WorldMap, X, Y) :- 
+    world_cell(WorldMap, X, Y, player).
 
 setup_world(World, Width, Height) :-
     assert(world(0,0,[])),
-    World = [1:1-player, 3:Height-pit, Width:2-pit, 1:Height-gold, Width:Height-wumpus],
-    set_world_map(World),
-    set_world_size(10,10).
+    WorldMap = [1:1-player, 3:Height-pit, Width:2-pit, 2:Height-gold, Width:Height-wumpus],
+    set_world_map(WorldMap),
+    set_world_size(Width,Height),
+    World = [Width,Height,WorldMap].
 
 setup_world :-
-    setup_world(_, 10, 10).
+    setup_world(_, 5 ,5).
 
 report_not_found_on_map(Object) :-
     write(Object), writeln(" was not found on map"),
@@ -227,42 +227,36 @@ validate_world(World) :-
 
 /** Perception */
 
-perceive_breeze(X, Y) :-
-    get_world_map(World),
+perceive_breeze([_,_,WorldMap], X, Y) :-
     adjacent(X:Y, Xa:Ya),
-    cell_contains_pit(World, Xa, Ya).
+    cell_contains_pit(WorldMap, Xa, Ya).
 
-perceive_bump(X, Y) :-
-    get_world_size(W, H),
+perceive_bump([W,H,_], X, Y) :-
     (X > W; Y > H).
 
-perceive_bump(X, Y) :-
+perceive_bump([_,_,_], X, Y) :-
     (X < 1; Y < 1).
 
-perceive_glitter(X, Y) :-
-    get_world_map(World),
-    cell_contains_gold(World, X, Y).
+perceive_glitter([_,_,WorldMap], X, Y) :-
+    cell_contains_gold(WorldMap, X, Y).
 
-perceive_scream(X, Y) :-
-    get_world_map(World),
-    world_cell(World, X, Y, wumpus_killed).
+perceive_scream([_,_,WorldMap], X, Y) :-
+    world_cell(WorldMap, X, Y, wumpus_killed).
 
-perceive_stench(X, Y) :-
-    get_world_map(World),
-    cell_contains_wumpus(World, X, Y).
+perceive_stench([_,_,WorldMap], X, Y) :-
+    cell_contains_wumpus(WorldMap, X, Y).
 
-perceive_stench(X ,Y) :-
-    get_world_map(World),
+perceive_stench([_,_,WorldMap], X ,Y) :-
     adjacent(X:Y, Xa:Ya),
-    cell_contains_wumpus(World, Xa, Ya).
+    cell_contains_wumpus(WorldMap, Xa, Ya).
 
-%perceive(+X, +Y, -State)
-perceive(X, Y, State) :-
-    ((perceive_breeze(X,Y) -> Breeze = true ; Breeze = false), true),
-    ((perceive_bump(X,Y) -> Bump = true ; Bump = false), true),
-    ((perceive_glitter(X,Y) -> Glitter = true ; Glitter = false), true),
-    ((perceive_scream(X,Y) -> Scream = true ; Scream = false), true),
-    ((perceive_stench(X,Y) -> Stench = true ; Stench = false), true),
+%perceive(+World,+X, +Y, -State)
+perceive(World, X, Y, State) :-
+    ((perceive_breeze(World, X,Y) -> Breeze = true ; Breeze = false), true),
+    ((perceive_bump(World, X,Y) -> Bump = true ; Bump = false), true),
+    ((perceive_glitter(World, X,Y) -> Glitter = true ; Glitter = false), true),
+    ((perceive_scream(World, X,Y) -> Scream = true ; Scream = false), true),
+    ((perceive_stench(World, X,Y) -> Stench = true ; Stench = false), true),
     State = [Breeze,Bump,Glitter,Scream,Stench],
     true.
 
@@ -270,72 +264,216 @@ perceive(X, Y, State) :-
 
 /** Player operations */
 
-%move_player_at(+World, +NewX, +NewY, -World)
+%move_player_at(+Player, +World, +NewX, +NewY, -Player, -World)
+move_player_at(Player, World, X, Y, NewPlayer, NewWorld) :-
+    Player = [_,_,Heading,ArrowCount,GoldCount,IsDead],
+    World = [Width,Height,WorldMap],
+    cell_contains_player(WorldMap, X0, Y0),
+    index(WorldMap, X0:Y0-player, Index),
+    replace(WorldMap, Index, X:Y-player, NewWorldMap),
+    NewWorld = [Width,Height,NewWorldMap],
+    NewPlayer = [X,Y,Heading,ArrowCount,GoldCount,IsDead].
 
-move_player_at(X, Y) :-
-    get_world_map(World),
-    set_player_coords(X, Y),
-    cell_contains_player(World, X0, Y0),
-    index(World, X0:Y0-player, Index),
-    replace(World, Index, X:Y-player, NewWorld),
-    set_world_map(NewWorld).
-
-%can_move_forward(-NewCoordX,-NewCoordY)
-can_move_forward(NewCoordX,NewCoordY) :-
-    get_player_coords(CoordX,CoordY),
-    get_player_heading(Hx:Hy),
+%can_move_forward(+Player,+World,-NewCoordX,-NewCoordY)
+can_move_forward(Player,World,NewCoordX,NewCoordY) :-
+    Player = [CoordX,CoordY,Hx:Hy,_,_,_],
     NewCoordX is CoordX + Hx,
     NewCoordY is CoordY + Hy,
-    \+ perceive_bump(NewCoordX,NewCoordY).
+    \+ perceive_bump(World,NewCoordX,NewCoordY).
 
 /** Player actions */
-%action_forward
-action_forward :-
-    \+ can_move_forward(_,_),
-    get_player_state(S1,_   ,S3,S4,S5),
-    set_player_state(S1,true,S3,S4,S5),
-    mod_score_by(1).
 
-action_forward :-
-    can_move_forward(NewCoordX,NewCoordY),
-    move_player_at(NewCoordX,NewCoordY),
-    mod_score_by(1).
+%action_forward(+Player,+World,-Player,-World)
+/**action_forward(Player,World,NewPlayer,NewWorld) :-
+    \+ can_move_forward(Player,World,_,_),
+    NewPlayer = Player,
+    NewWorld = World. 
+*/
 
-%action_turn
-action_turn_left :-
-    get_player_heading(Xh:Yh),
+action_forward(Player,World,NewPlayer,NewWorld) :-
+    can_move_forward(Player,World,NewCoordX,NewCoordY),
+    move_player_at(Player,World,NewCoordX,NewCoordY,NewPlayer,NewWorld).
+
+%action_turn_left(+Player,+World,-Player,-World)
+action_turn_left(Player,World,NewPlayer,NewWorld) :-
+    Player = [X,Y,Xh:Yh,ArrowCount,GoldCount,IsDead],
     turn_ccw(Xh:Yh,NXh:NYh),
-    set_player_heading(NXh:NYh),
-    mod_score_by(1).
+    NewPlayer = [X,Y,NXh:NYh,ArrowCount,GoldCount,IsDead],
+    NewWorld = World.
 
-action_turn_right :-
-    get_player_heading(Xh:Yh),
+%action_turn_right(+Player,+World,-Player,-World)
+action_turn_right(Player,World,NewPlayer,NewWorld) :-
+    Player = [X,Y,Xh:Yh,ArrowCount,GoldCount,IsDead],
     turn_cw(Xh:Yh,NXh:NYh),
-    set_player_heading(NXh:NYh),
-    mod_score_by(1).
+    NewPlayer = [X,Y,NXh:NYh,ArrowCount,GoldCount,IsDead],
+    NewWorld = World.
 
-%action_grab
-action_grab :-
-    get_world_map(World),
-    get_player_coords(CoordX,CoordY),
-    (cell_contains_gold(World,CoordX,CoordY)
-     -> set_player_gold_count(1)),
-    mod_score_by(1).
+%action_grab(+Player,+World,-Player,-World)
+action_grab(Player,World,NewPlayer,NewWorld) :-
+    Player = [CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead],
+    World = [_,_,WorldMap],
+    (cell_contains_gold(WorldMap,CoordX,CoordY)
+     -> NewGoldCount is GoldCount + 1 ; NewGoldCount = GoldCount),
+    NewPlayer = [CoordX,CoordY,Heading,ArrowCount,NewGoldCount,IsDead],
+    NewWorld = World.
 
-%action_shoot
-action_shoot :-
+%action_shoot(+Player,+World,-Player,-World)
+action_shoot(Player,World,NewPlayer,NewWorld) :-
     %TODO: arrow magic
-    mod_score_by(1).
+    NewPlayer = Player,
+    NewWorld = World.
 
-%action_climb
-action_climb :-
-    get_player_coords(X,Y),
-    X == 1, Y == 1,
-    mod_score_by(1000).
+%action_climb(+Player,+World,-Player,-World)
+action_climb(Player,_,_,_) :-
+    Player = [X,Y,_,_,_,_],
+    X == 1, Y == 1.
+
+dump_actions([]).
+%dump_actions([_]).
+%dump_actions([_|_]).
+
+dump_actions([Action]) :-
+    write(Action).
+
+dump_actions([Action|Actions]) :-
+    write(Action), write(", "),
+    dump_actions(Actions).
+
 
 /** Pathfinding */
 
+%check_game_state(+World,+Player,+Score,+Actions)
+check_game_state(World,Player,_,_,_,Result) :-
+    World = [_,_,WorldMap],
+    Player = [CoordX,CoordY,_,_,_,_],
+    (cell_contains_wumpus(WorldMap,CoordX,CoordY);
+     cell_contains_pit(WorldMap,CoordX,CoordY)),
+    Result = lose.
+
+check_game_state(World,Player,_,_,_,Result) :-
+    World = [_,_,WorldMap],
+    Player = [CoordX,CoordY,_,_,_,_],
+    \+ cell_contains_wumpus(WorldMap,CoordX,CoordY),
+    \+ cell_contains_pit(WorldMap,CoordX,CoordY),
+    \+ cell_contains_gold(WorldMap,CoordX,CoordY),
+    Result = continue.
+
+check_game_state(World,Player,Score,Actions,ActionsReturn,Result) :-
+    World = [_,_,_],
+    Player = [CoordX,CoordY,_,_,GoldCount,_],
+    CoordX = 1, CoordY = 1,
+    GoldCount = 1,
+    %cell_contains_gold(WorldMap,CoordX,CoordY),
+    writeln("\e[37;1m You won! \e[0m"),
+    write("\e[32;1m"),
+    write("Score: "),writeln(Score),
+    dump_player(Player),
+    dump_world(World),
+    append(Actions, [CoordX:CoordY-climb-1], NewActions),
+    dump_actions(NewActions),
+    write("\e[0m"),
+    ActionsReturn = NewActions,
+    Result = won.
+
+%find_path(+World,+Player,+Score,+Actions)
+:- dynamic find_path/4.
+
+/*find_path_forward(World,Player,Score,Actions,ActionsReturn) :-
+    Player = [X,Y,_,_,GoldCount,_],
+    not(index(Actions,X:Y-forward-GoldCount,_)),
+    action_forward(Player,World,NewPlayer,NewWorld),
+    NewScore is Score - 1,
+    append(Actions, [X:Y-forward-GoldCount], NewActions1),
+    append(NewActions1, [X:Y-visited-GoldCount], NewActions),
+    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
+
+find_path_left(World,Player,Score,Actions,ActionsReturn) :-
+    Player = [X,Y,_,_,GoldCount,_],
+    not(index(Actions,X:Y-visited-GoldCount,_)),
+    %not(index(Actions,X:Y-forward-GoldCount,_)),
+    %not(index(Actions,X:Y-turn_left-GoldCount,_)),
+    not(index(Actions,X:Y-turn_right-GoldCount,_)),
+    action_turn_left(Player,World,NewPlayer,NewWorld),
+    NewScore is Score - 1,
+    append(Actions, [X:Y-turn_left-GoldCount], NewActions),
+    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
+
+find_path_right(World,Player,Score,Actions,ActionsReturn) :-
+    Player = [X,Y,_,_,GoldCount,_],
+    not(index(Actions,X:Y-visited-GoldCount,_)),
+    %not(index(Actions,X:Y-turn_right-GoldCount,_)),
+    not(index(Actions,X:Y-turn_left-GoldCount,_)),
+    action_turn_right(Player,World,NewPlayer,NewWorld),
+    NewScore is Score - 1,
+    append(Actions, [X:Y-turn_right-GoldCount], NewActions),
+    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).*/
+
+
+find_path_by_move(World,Player,Score,Actions,ActionsReturn,DX,DY) :-
+    Player = [X,Y,_,_,GoldCount,_],
+    not(index(Actions,X:Y-visited-GoldCount,_)),
+    NewX is X + DX, NewY is Y + DY,
+    \+ perceive_bump(World, NewX, NewY),
+    move_player_at(Player, World, NewX, NewY, NewPlayer, NewWorld),
+    NewScore is Score - 1,
+    append(Actions, [X:Y-visited-GoldCount], NewActions),
+    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
+
+find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
+    find_path_by_move(World,Player,Score,Actions,ActionsReturn,0,1).
+
+find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
+    find_path_by_move(World,Player,Score,Actions,ActionsReturn,0,-1).
+
+find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
+    find_path_by_move(World,Player,Score,Actions,ActionsReturn,1,0).
+
+find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
+    find_path_by_move(World,Player,Score,Actions,ActionsReturn,-1,0).
+
+find_path(World,Player,Score,Actions,ActionsReturn) :-
+    check_game_state(World,Player,Score,Actions,ActionsReturn,Result),
+    Result = lose, 
+    %writeln("\e[31;1m lose \e[0m"),
+    fail.
+
+find_path(World,Player,Score,Actions,ActionsReturn) :-
+    check_game_state(World,Player,Score,Actions,ActionsReturn,Result),
+    Result = won,
+    true.
+
+find_path(World,Player,Score,Actions,ActionsReturn) :-
+    Player = [X,Y,P1,P2,_,P4],
+    World = [Width,Height,WorldMap],
+    (cell_contains_gold(WorldMap,X,Y) -> (
+            index(WorldMap, Xg:Yg-gold, Index),
+            replace(WorldMap, Index, Xg:Yg-no_gold, NewWorldMap),
+            NewPlayer = [X,Y,P1,P2,1,P4]
+            %writeln("\e[32;1m gold picked up \e[0m")
+        ) ; NewPlayer = Player, NewWorldMap = WorldMap),
+    NewWorld = [Width,Height,NewWorldMap],
+    check_game_state(NewWorld,NewPlayer,Score,Actions,ActionsReturn,Result),
+    Result = continue,
+    %write("["),write(Score),write("]:"),
+    %dump_world(NewWorld),
+    %dump_player(NewPlayer),
+    %dump_actions(Actions),
+    %writeln(""),
+    find_path_by_action(NewWorld,NewPlayer,Score,Actions,ActionsReturn).
+    /*(
+        find_path_up(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
+        find_path_down(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
+        find_path_right(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
+        find_path_left(NewWorld,NewPlayer,Score,Actions,ActionsReturn)
+    ) -> true ; false.*/
+
 %find_path(World) :-
+find_path_on_current_state(Actions) :-
+    player(CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead),
+    Player = [CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead],
+    world(Width,Height,WorldMap),
+    World = [Width,Height,WorldMap],
+    find_path(World,Player,0,[],Actions).
 
 setup :-
     setup_variables,
