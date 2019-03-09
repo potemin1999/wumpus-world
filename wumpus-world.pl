@@ -207,7 +207,7 @@ cell_contains_player(WorldMap, X, Y) :-
 
 setup_world(World, Width, Height) :-
     assert(world(0,0,[])),
-    WorldMap = [1:1-player, 3:Height-pit, Width:2-pit, 2:Height-gold, Width:Height-wumpus],
+    WorldMap = [1:1-player, 3:Height-pit, Width:2-pit, 2:Height-gold, 1:2-wumpus],
     set_world_map(WorldMap),
     set_world_size(Width,Height),
     World = [Width,Height,WorldMap].
@@ -280,6 +280,37 @@ can_move_forward(Player,World,NewCoordX,NewCoordY) :-
     NewCoordX is CoordX + Hx,
     NewCoordY is CoordY + Hy,
     \+ perceive_bump(World,NewCoordX,NewCoordY).
+
+trace_an_arrow(World,Player,NewWorld) :-
+    Player = [_,_,Hx:Hy,_,_,_],
+    World = [Width,Height,WorldMap],
+    index(WorldMap,Xa:Ya-arrow,Index),
+    NewX is Xa + Hx, NewY is Ya + Hy,
+    \+ perceive_bump(World,NewX,NewY),
+    \+ index(WorldMap,NewX:NewY-wall,_),
+    \+ index(WorldMap,NewX:NewY-wumpus,_),
+    replace(WorldMap, Index, NewX:NewY-arrow, NewWorldMap),
+    WorldR = [Width,Height,NewWorldMap],
+    trace_an_arrow(WorldR,Player,NewWorld).
+
+trace_an_arrow(World,Player,NewWorld) :-
+    Player = [_,_,Hx:Hy,_,_,_],
+    World = [Width,Height,WorldMap],
+    index(WorldMap,Xa:Ya-arrow,Index),
+    NewX is Xa + Hx, NewY is Ya + Hy,
+    index(WorldMap,NewX:NewY-wumpus,IndexW),
+    replace(WorldMap, IndexW, NewX:NewY-dead_wumpus, WorldMap1),
+    replace(WorldMap1, Index, NewX:NewY-shoot_arrow, NewWorldMap),
+    NewWorld = [Width,Height,NewWorldMap].
+
+trace_an_arrow(World,Player,NewWorld) :-
+    Player = [_,_,Hx:Hy,_,_,_],
+    World = [_,_,WorldMap],
+    index(WorldMap,Xa:Ya-arrow,_),
+    NewX is Xa + Hx, NewY is Ya + Hy,
+    perceive_bump(World,NewX,NewY),
+    NewWorld = World,
+    fail.
 
 /** Player actions */
 
@@ -408,15 +439,32 @@ find_path_right(World,Player,Score,Actions,ActionsReturn) :-
     append(Actions, [X:Y-turn_right-GoldCount], NewActions),
     find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).*/
 
-
 find_path_by_move(World,Player,Score,Actions,ActionsReturn,DX,DY) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-visited-GoldCount,_)),
+    Player = [X,Y,Hx:Hy,_,GoldCount,_],
+    not(index(Actions,X:Y-forward-GoldCount,_)),
     NewX is X + DX, NewY is Y + DY,
     \+ perceive_bump(World, NewX, NewY),
-    move_player_at(Player, World, NewX, NewY, NewPlayer, NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-visited-GoldCount], NewActions),
+    (
+        (
+            (Hx = -DX, Hy = DY) ; (Hx = DX, Hy = -DY) ;
+            (-Hx = DX, Hy = DY) ; (Hx = DX, -Hy = DY)
+        ) -> (
+            append(Actions, [X:Y-turn_right-GoldCount,
+                X:Y-turn_right-GoldCount], Actions2),
+            NewScore is Score - 3 )
+        ;(Hx = DX, Hy = DY) -> (
+            Actions2 = Actions,
+            NewScore is Score - 1 )
+         ;(  
+            ((turn_cw(Hx:Hy,DX:DY) ; turn_ccw(DX:DY,Hx:Hy)) ->
+                Dir = turn_right ; Dir = turn_left),
+            append(Actions, [X:Y-Dir-GoldCount], Actions2),
+            NewScore is Score - 2)
+    ),
+    move_player_at(Player, World, NewX, NewY, Player1, NewWorld),
+    Player1 = [X1,Y1,_,ArrowCount1,GoldCount1,IsDead],
+    NewPlayer = [X1,Y1,DX:DY,ArrowCount1,GoldCount1,IsDead],
+    append(Actions2, [X:Y-forward-GoldCount], NewActions),
     find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
 
 find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
@@ -431,16 +479,30 @@ find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
 find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
     find_path_by_move(World,Player,Score,Actions,ActionsReturn,-1,0).
 
+find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
+    Player = [X,Y,Hx:Hy,ArrowCount,GoldCount,IsDead],
+    World = [Width,Height,WorldMap],
+    ArrowCount = 1,
+    perceive_stench(World,X,Y),
+    NewArrowCount is ArrowCount - 1,
+    append(WorldMap,[X:Y-arrow],WorldMap1),
+    World1 = [Width,Height,WorldMap1],
+    trace_an_arrow(World1,Player,NewWorld),
+    NewPlayer = [X,Y,Hx:Hy,NewArrowCount,GoldCount,IsDead],
+    NewScore is Score - 1,
+    append(Actions,[X:Y-shoot],NewActions),
+    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
+
+
+
 find_path(World,Player,Score,Actions,ActionsReturn) :-
     check_game_state(World,Player,Score,Actions,ActionsReturn,Result),
-    Result = lose, 
-    %writeln("\e[31;1m lose \e[0m"),
+    Result = lose,
     fail.
 
 find_path(World,Player,Score,Actions,ActionsReturn) :-
     check_game_state(World,Player,Score,Actions,ActionsReturn,Result),
-    Result = won,
-    true.
+    Result = won.
 
 find_path(World,Player,Score,Actions,ActionsReturn) :-
     Player = [X,Y,P1,P2,_,P4],
