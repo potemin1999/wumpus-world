@@ -1,5 +1,5 @@
-%:- use_module(library(clpfd)).
 
+/** Movements */
 dir_rotate(right, right, down).
 dir_rotate(right, left, up).
 dir_rotate(down, right, left).
@@ -31,22 +31,8 @@ do_move_newpos(X/Y-up,forward,X/Y1-up) :-
 do_move_newpos(X/Y-Dir,Rotation,X/Y-NDir) :-
     ( Rotation = right ; Rotation = left),
     dir_rotate(Dir,Rotation,NDir).
-    %write("new dir:"),writeln(NDir).
 
-/*
-is_height_in_bounds(Value) :-
-    get_world_height(Height),
-    Value > 0, Value =< Height.
-
-is_width_in_bounds(Value) :-
-    get_world_width(Width),
-    Value > 0, Value =< Width.
-
-is_position_in_bounds(PosX/PosY) :-
-    is_width_in_bounds(PosX),
-    is_height_in_bounds(PosY).
-*/
-
+/** World helper functions */
 adjacent(X1/Y1,X2/Y2) :-
     ( X2 is X1 - 1, Y2 = Y1 ;
       X2 is X1 + 1, Y2 = Y1 ;
@@ -78,29 +64,6 @@ in_previous_plan(Position, History) :-
     member(HistoryEntry, History),
     memberchk(Position, Plan).
 
-get_next_target(History,Target) :-
-    %writeln("is visited?"),
-    visited(Somepos, History),
-    %writeln("is adjacent?"),
-    adjacent(Somepos, Neighbour),
-    %writeln("is neighbour visited?"),
-    \+ visited(Neighbour, History),
-    %writeln("is in previous plan?"),
-    \+ in_previous_plan(Neighbour, History),
-    %writeln("is wumpus in this place?"),
-    no_wumpus_nearby(Neighbour, History),
-    %writeln("is pit in this place?"),
-    no_pit(Neighbour, History),
-    %write("result : "), writeln(Neighbour),
-    Target = Neighbour.
-
-get_target_history_plan(Pos, Target, _Hist, [Target]) :-
-    adjacent(Pos, Target).
-
-get_target_history_plan(Pos, Target, Hist, [Next|Rest]) :-
-    adjacent(Pos, Next),
-    visited(Next, Hist),
-    get_target_history_plan(Next, Target, Hist, Rest).
 
 get_world_height(4) .
 get_world_width(4).
@@ -191,41 +154,41 @@ do_next(State, done) :-
     is_done(State).
 
 do_next(State0, S) :-
-        \+ is_done(State0),
-        %writeln("not done"),
-        State0 = ag(Agent0):ps(Position0):bs(Bumped0,Screamed0):ac(Actions0),
-        Perception = [_Breeze,Bumped0,_Glitter,Screamed0,_Stench],
-        %writeln("perception...."),
-        world_perception(Actions0, Position0, Perception),
-        %writeln("percepted"),
-        agent_do_next(Agent0, Perception, Action, Agent),
-        write('agent at: '), writeln(Position0),
-        ( var(Action) -> c_error('Agent does not react.') ; true),
-        is_valid_action(Action, Position0, Actions0),
-        %writeln("action validated"),
-        ((  Action == shoot,
-            cell_contains(WuPos,wumpus),
-            agent_faced_to(Position0,WuPos)
-         ) -> Scream = true ; Scream = false),
-       % writeln("scream overridden"),
-        (   is_bumping(Position0, Action) ->
-                %writeln("bumped"),
-                Bumped = true, Position = Position0  % no change of position
-        ;
-                Bumped = false,
-                %writeln("not bumped, trying to move"),
-                %writeln(Position0),
-                %writeln(Action),
-                do_move_newpos(Position0, Action, Position)
-                 %writeln("moved")
-        ),
-        %writeln("checking position"),
-        is_valid_position(Position, Actions0),
-        NewActionEntry = ae(Position,Action),
-        NewActions = [NewActionEntry|Actions0],
-        NewState = ag(Agent):ps(Position):bs(Bumped,Scream):ac(NewActions),
-        %writeln("next"),
-        do_next(NewState, S).
+    \+ is_done(State0),
+    %writeln("not done"),
+    State0 = ag(Agent0):ps(Position0):bs(Bumped0,Screamed0):ac(Actions0),
+    Perception = [_Breeze,Bumped0,_Glitter,Screamed0,_Stench],
+    %writeln("perception...."),
+    world_perception(Actions0, Position0, Perception),
+    %writeln("percepted"),
+    agent_do_next(Agent0, Perception, Action, Agent),
+    write('agent at: '), writeln(Position0),
+    ( var(Action) -> c_error('Agent does not react.') ; true),
+    is_valid_action(Action, Position0, Actions0),
+    %writeln("action validated"),
+    ((  Action == shoot,
+        cell_contains(WuPos,wumpus),
+        agent_faced_to(Position0,WuPos)
+     ) -> Scream = true ; Scream = false),
+        writeln("scream overridden"),
+    (   is_bumping(Position0, Action) ->
+            %writeln("bumped"),
+            Bumped = true, Position = Position0  % no change of position
+    ;
+            Bumped = false,
+            %writeln("not bumped, trying to move"),
+            %writeln(Position0),
+            %writeln(Action),
+            do_move_newpos(Position0, Action, Position)
+             %writeln("moved")
+    ),
+    %writeln("checking position"),
+    is_valid_position(Position, Actions0),
+    NewActionEntry = ae(Position,Action),
+    NewActions = [NewActionEntry|Actions0],
+    NewState = ag(Agent):ps(Position):bs(Bumped,Scream):ac(NewActions),
+    %writeln("next"),
+    do_next(NewState, S).
 
 /**** AGENTS ****/
 
@@ -262,10 +225,8 @@ agent_do_next(State0, _Perc, Action, State) :- %action - climb
     State = s(Pos,[],History), !.
 
 % normally, we only follow the plan we made previously
-%agent_do_next(State0, Perception, Action, State) :-
 agent_do_next(State0, Perception, Action, State) :- 
     State0 = s(Position,[Plan1|Plans],History), !,
-    %writeln("following old plan"),
     pos_nextpos_goodmove(Position, Plan1, Action),
     do_move_newpos(Position, Action, Position1-Direction1),
     ( Position1 = Plan1 ->
@@ -284,23 +245,44 @@ agent_do_next(State0, Perception, Action, State) :-
     History = [HistoryEntry|History0],
     PosDir0 = Position0-_Direction0,
     ( get_next_target(History, Target) ->
-            %write("got new target:"), writeln(Target),
-            once(get_target_history_plan(Position0,Target,History,Plan)),
-            Plan = [Plan1|_],
-            pos_nextpos_goodmove(PosDir0, Plan1, Action),
-            do_move_newpos(PosDir0, Action, Position),
-            State = s(Position, Plan, History)
-    ;       % no new target left - get out of this maze
-            %writeln("no target left"),
-            once(get_target_history_plan(Position0,1/1,History,RescuePlan0)),
-            append(RescuePlan0, [climb], RescuePlan),
-            Action = right,  % do anything
-            do_move_newpos(PosDir0, Action, Position),
-            State = s(Position,RescuePlan,History)
+        %write("got new target:"), writeln(Target),
+        once(get_target_history_plan(Position0,Target,History,Plan)),
+        Plan = [Plan1|_],
+        pos_nextpos_goodmove(PosDir0, Plan1, Action),
+        do_move_newpos(PosDir0, Action, Position),
+        State = s(Position, Plan, History)
+    ;   % no new target left - get out of this maze
+        %writeln("no target left"),
+        once(get_target_history_plan(Position0,1/1,History,RescuePlan0)),
+        append(RescuePlan0, [climb], RescuePlan),
+        Action = right,  % do anything
+        do_move_newpos(PosDir0, Action, Position),
+        State = s(Position,RescuePlan,History)
     ).
+
+/** targeting */
 
 pos_nextpos_goodmove(Position-Direction,Next,Move) :-
     ( agent_faced_to(Position-Direction,Next) -> Move = forward ; Move = right ).
+
+get_next_target(History,Target) :-
+    visited(Somepos, History),
+    adjacent(Somepos, Neighbour),
+    \+ visited(Neighbour, History),
+    \+ in_previous_plan(Neighbour, History),
+    no_wumpus_nearby(Neighbour, History),
+    no_pit(Neighbour, History),
+    Target = Neighbour.
+
+get_target_history_plan(Pos, Target, _Hist, [Target]) :-
+    adjacent(Pos, Target).
+
+get_target_history_plan(Pos, Target, Hist, [Next|Rest]) :-
+    adjacent(Pos, Next),
+    visited(Next, Hist),
+    get_target_history_plan(Next, Target, Hist, Rest).
+
+/** pathfinding */
 
 find_action(Actions) :-
    do_setup(State), 
