@@ -1,3 +1,8 @@
+index([E|_], E, 1).
+
+index([_|T], E, I) :- 
+    index(T, E, I1),  I is I1+1.
+
 /** Movements */
 dir_rotate(right,right,down).
 dir_rotate(right,left,up).
@@ -158,17 +163,19 @@ do_next(State0,Status) :-
     ( var(Action) -> do_report_and_exit('Agent does not react.') ; true),
     is_valid_action(Action,Position0,Actions0),
     (   (Action == shoot,cell_contains(WuPos,wumpus),agent_faced_to(Position0,WuPos))
-        -> Scream = true 
-        ;  Scream = false
+        ->  Scream = true 
+        ;   Scream = false
     ),
     (   is_bumping(Position0,Action) 
-        -> Bumped = true,Position = Position0  % no change of position
-        ;  Bumped = false, do_move_newpos(Position0,Action,Position)
+        ->  Bumped = true,Position = Position0,writeln("bumping")  % no change of position
+        ;   Bumped = false, do_move_newpos(Position0,Action,Position),
+            Agent = s(Position,_,History),
+            NewAgent = s(Position,[],History)
     ),
     is_valid_position(Position,Actions0),
     NewActionEntry = ae(Position,Action),
     NewActions = [NewActionEntry|Actions0],
-    NewState = ag(Agent):ps(Position):bs(Bumped,Scream):ac(NewActions),
+    NewState = ag(NewAgent):ps(Position):bs(Bumped,Scream):ac(NewActions),
     do_next(NewState,Status).
 
 /**** AGENTS ****/
@@ -185,26 +192,55 @@ agent_do_setup(State) :-
 
 %agent_do_next(+State0,+Perception,-Action,-State) :-
 agent_do_next(State0,Perception,grab,State) :- %action - grab
+writeln("do grab"),
     Perception = [_Breeze,_Bump,true,_Scream,_Stench],!,% Gold? ==> grab
-    State0 = s(Position,Plan,History),
-    HistEntry = he(Position,Plan,Perception,grab),
-    State = s(Position,Plan,[HistEntry|History]).
-
-agent_do_next(State0,Perception,Action,State) :- %action - any,but we have bumped
-    Perception = [_Breeze,true,_Glitter,_Scream,_Stench],!,
-    State0 = s(_Position,_Plan,History),
-    History = [HistEntry|_],
-    HistEntry = he(Position,_,_,_),
-    Action = right,
-    do_move_newpos(Position,Action,NewPosition),
-    State = s(NewPosition,[],History).
+    State0 = s(Position,CellHistory,History),
+    HistEntry = he(Position,CellHistory,Perception,grab),
+    State = s(Position,CellHistory,[HistEntry|History]).
 
 agent_do_next(State0,_Perc,climb,State) :- %action - climb
     State0 = s(Position,[climb],History),
     State = s(Position,[],History),!.
 
-% normally,we only follow the plan we made previously
 agent_do_next(State0,Perception,Action,State) :- 
+    writeln("do forward"),
+    Perception = [_Breeze,false,false,_Scream,_Stench],
+    State0 = s(Position,CellHistory,History),
+    HistEntry = he(Position,[],Perception,forward),
+    Action = forward,
+    do_move_newpos(Position,Action,NewPosition),
+    State = s(NewPosition,CellHistory,[HistEntry|History]).
+
+agent_do_next(State0,Perception,Action,State) :- %action - any,but we have bumped
+writeln("do bump"),
+    Perception = [_Breeze,true,_Glitter,_Scream,_Stench],!,
+    State0 = s(_Position,CellHistory,History),
+    History = [HistEntry|_],
+    HistEntry = he(Position,_,_,_),
+    (Action = left ; Action = right),
+    Position = _-Dir,
+    \+ member(Dir,CellHistory),
+    do_move_newpos(Position,Action,NewPosition),
+    NewPosition = _-NewDir,
+    NewCellHistory = [NewDir|CellHistory],
+    do_move_newpos(Position,Action,NewPosition),
+    State = s(NewPosition,NewCellHistory,History).
+
+agent_do_next(State0,Perception,Action,State) :- 
+    writeln("do turn"),
+    Perception = [_Breeze,false,false,_Scream,_Stench],
+    State0 = s(Position,CellHistory,History),
+    (Action = left ; Action = right),
+    Position = _-Dir,
+    \+ member(Dir,CellHistory),
+    do_move_newpos(Position,Action,NewPosition),
+    NewPosition = _-NewDir,
+    NewCellHistory = [NewDir|CellHistory],
+    HistEntry = he(Position,[],Perception,Action),
+    State = s(NewPosition,NewCellHistory,[HistEntry|History]).
+
+% normally,we only follow the plan we made previously
+/*agent_do_next(State0,Perception,Action,State) :- 
     State0 = s(Position,[Plan1|Plans],History),!,
     pos_nextpos_goodmove(Position,Plan1,Action),
     do_move_newpos(Position,Action,Position1-Direction1),
@@ -232,7 +268,7 @@ agent_do_next(State0,Perception,Action,State) :-
         Action = right, % do anything
         do_move_newpos(PosDir0,Action,Position),
         State = s(Position,RescuePlan,History)
-    ).
+    ).*/
 
 /** targeting */
 %TODO: remove them
@@ -266,5 +302,6 @@ find_action(Actions) :-
    do_next(State,Actions).
 
 find_actions(Actions2) :-
-    findall(Actions,find_action(Actions),Actions2).
+    findall(Actions,find_action(Actions),Actions2),
+    writeln(Actions2).
     
