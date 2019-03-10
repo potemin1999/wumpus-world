@@ -1,3 +1,7 @@
+/** Below you can see a lot of useless functions 
+ *  And wumpus world
+ */
+
 /** Global vars */
 
 %score(Value)
@@ -207,7 +211,7 @@ cell_contains_player(WorldMap, X, Y) :-
 
 setup_world(World, Width, Height) :-
     assert(world(0,0,[])),
-    WorldMap = [1:1-player, 3:Height-pit, Width:2-pit, 2:Height-gold, 1:2-wumpus],
+    WorldMap = [1:1-player, 3:Height-pit, Width:2-pit, 2:Height-gold, 2:3-wumpus],
     set_world_map(WorldMap),
     set_world_size(Width,Height),
     World = [Width,Height,WorldMap].
@@ -260,8 +264,6 @@ perceive(World, X, Y, State) :-
     State = [Breeze,Bump,Glitter,Scream,Stench],
     true.
 
-
-
 /** Player operations */
 
 %move_player_at(+Player, +World, +NewX, +NewY, -Player, -World)
@@ -301,6 +303,7 @@ trace_an_arrow(World,Player,NewWorld) :-
     index(WorldMap,NewX:NewY-wumpus,IndexW),
     replace(WorldMap, IndexW, NewX:NewY-dead_wumpus, WorldMap1),
     replace(WorldMap1, Index, NewX:NewY-shoot_arrow, NewWorldMap),
+    writeln("wumpus shoot!"),
     NewWorld = [Width,Height,NewWorldMap].
 
 trace_an_arrow(World,Player,NewWorld) :-
@@ -309,18 +312,10 @@ trace_an_arrow(World,Player,NewWorld) :-
     index(WorldMap,Xa:Ya-arrow,_),
     NewX is Xa + Hx, NewY is Ya + Hy,
     perceive_bump(World,NewX,NewY),
-    NewWorld = World,
-    fail.
+    NewWorld = World.
 
 /** Player actions */
-
-%action_forward(+Player,+World,-Player,-World)
-/**action_forward(Player,World,NewPlayer,NewWorld) :-
-    \+ can_move_forward(Player,World,_,_),
-    NewPlayer = Player,
-    NewWorld = World. 
-*/
-
+/*
 action_forward(Player,World,NewPlayer,NewWorld) :-
     can_move_forward(Player,World,NewCoordX,NewCoordY),
     move_player_at(Player,World,NewCoordX,NewCoordY,NewPlayer,NewWorld).
@@ -358,10 +353,8 @@ action_shoot(Player,World,NewPlayer,NewWorld) :-
 action_climb(Player,_,_,_) :-
     Player = [X,Y,_,_,_,_],
     X == 1, Y == 1.
-
+*/
 dump_actions([]).
-%dump_actions([_]).
-%dump_actions([_|_]).
 
 dump_actions([Action]) :-
     write(Action).
@@ -401,43 +394,13 @@ check_game_state(World,Player,Score,Actions,ActionsReturn,Result) :-
     dump_player(Player),
     dump_world(World),
     append(Actions, [CoordX:CoordY-climb-1], NewActions),
-    dump_actions(NewActions),
+    writeln(NewActions),
     write("\e[0m"),
     ActionsReturn = NewActions,
     Result = won.
 
 %find_path(+World,+Player,+Score,+Actions)
 :- dynamic find_path/4.
-
-/*find_path_forward(World,Player,Score,Actions,ActionsReturn) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-forward-GoldCount,_)),
-    action_forward(Player,World,NewPlayer,NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-forward-GoldCount], NewActions1),
-    append(NewActions1, [X:Y-visited-GoldCount], NewActions),
-    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
-
-find_path_left(World,Player,Score,Actions,ActionsReturn) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-visited-GoldCount,_)),
-    %not(index(Actions,X:Y-forward-GoldCount,_)),
-    %not(index(Actions,X:Y-turn_left-GoldCount,_)),
-    not(index(Actions,X:Y-turn_right-GoldCount,_)),
-    action_turn_left(Player,World,NewPlayer,NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-turn_left-GoldCount], NewActions),
-    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
-
-find_path_right(World,Player,Score,Actions,ActionsReturn) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-visited-GoldCount,_)),
-    %not(index(Actions,X:Y-turn_right-GoldCount,_)),
-    not(index(Actions,X:Y-turn_left-GoldCount,_)),
-    action_turn_right(Player,World,NewPlayer,NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-turn_right-GoldCount], NewActions),
-    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).*/
 
 find_path_by_move(World,Player,Score,Actions,ActionsReturn,DX,DY) :-
     Player = [X,Y,Hx:Hy,_,GoldCount,_],
@@ -493,8 +456,6 @@ find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
     append(Actions,[X:Y-shoot],NewActions),
     find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
 
-
-
 find_path(World,Player,Score,Actions,ActionsReturn) :-
     check_game_state(World,Player,Score,Actions,ActionsReturn,Result),
     Result = lose,
@@ -510,24 +471,14 @@ find_path(World,Player,Score,Actions,ActionsReturn) :-
     (cell_contains_gold(WorldMap,X,Y) -> (
             index(WorldMap, Xg:Yg-gold, Index),
             replace(WorldMap, Index, Xg:Yg-no_gold, NewWorldMap),
-            NewPlayer = [X,Y,P1,P2,1,P4]
+            NewPlayer = [X,Y,P1,P2,1,P4],
+            NewActions = [Actions|X:Y-grab-1]
             %writeln("\e[32;1m gold picked up \e[0m")
-        ) ; NewPlayer = Player, NewWorldMap = WorldMap),
+        ) ; NewPlayer = Player, NewWorldMap = WorldMap,NewActions = Actions),
     NewWorld = [Width,Height,NewWorldMap],
-    check_game_state(NewWorld,NewPlayer,Score,Actions,ActionsReturn,Result),
+    check_game_state(NewWorld,NewPlayer,Score,NewActions,ActionsReturn,Result),
     Result = continue,
-    %write("["),write(Score),write("]:"),
-    %dump_world(NewWorld),
-    %dump_player(NewPlayer),
-    %dump_actions(Actions),
-    %writeln(""),
-    find_path_by_action(NewWorld,NewPlayer,Score,Actions,ActionsReturn).
-    /*(
-        find_path_up(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
-        find_path_down(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
-        find_path_right(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
-        find_path_left(NewWorld,NewPlayer,Score,Actions,ActionsReturn)
-    ) -> true ; false.*/
+    find_path_by_action(NewWorld,NewPlayer,Score,NewActions,ActionsReturn).
 
 %find_path(World) :-
 find_path_on_current_state(Actions) :-
