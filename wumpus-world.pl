@@ -139,14 +139,12 @@ setup_variables :-
 /** List operations*/
 
 %index(+List, +Element, -Index)
-
 index([E|_], E, 1).
 
 index([_|T], E, I) :- 
     index(T, E, I1),  I is I1+1.
 
 %replace(+List, +Index, +Value, -List)
-
 replace([_|T],  1,  X,  [X|T]).
 
 replace([H|T],  I,  X,  [H|R]) :-
@@ -163,7 +161,7 @@ replace(L,  _,  _,  L).
  * player
  * pit
  * wumpus
- * wumpus_killed
+ * dead_wumpus
  */
 
 %world_cell(+World, +X, +Y, -Value)
@@ -175,7 +173,6 @@ world_cell([_|World], X, Y, Value) :-
     world_cell(World, X, Y, Value).
 
 %adjacent(+Width,+Height,+X:Y,-X:Y)
-
 adjacent(W,H,X1:Y1,X2:Y2) :-
     ( X2 is X1 - 1, Y2 = Y1 , X1 > 1 ) ;
     ( X2 is X1 + 1, Y2 = Y1 , X1 < W ) ;
@@ -194,8 +191,6 @@ turn_cw( 0:1 , 1:0 ).
 
 turn_ccw(A, B) :-
     turn_cw(B, A).
-
-%cell_contains_something(+World, +X, +Y)
 
 cell_contains_gold(WorldMap, X, Y) :- 
     world_cell(WorldMap, X, Y, gold).
@@ -245,7 +240,7 @@ perceive_glitter([_,_,WorldMap], X, Y) :-
     cell_contains_gold(WorldMap, X, Y).
 
 perceive_scream([_,_,WorldMap], X, Y) :-
-    world_cell(WorldMap, X, Y, wumpus_killed).
+    world_cell(WorldMap, X, Y, dead_wumpus).
 
 perceive_stench([_,_,WorldMap], X, Y) :-
     cell_contains_wumpus(WorldMap, X, Y).
@@ -303,7 +298,6 @@ trace_an_arrow(World,Player,NewWorld) :-
     index(WorldMap,NewX:NewY-wumpus,IndexW),
     replace(WorldMap, IndexW, NewX:NewY-dead_wumpus, WorldMap1),
     replace(WorldMap1, Index, NewX:NewY-shoot_arrow, NewWorldMap),
-    writeln("wumpus shoot!"),
     NewWorld = [Width,Height,NewWorldMap].
 
 trace_an_arrow(World,Player,NewWorld) :-
@@ -314,46 +308,6 @@ trace_an_arrow(World,Player,NewWorld) :-
     perceive_bump(World,NewX,NewY),
     NewWorld = World.
 
-/** Player actions */
-/*
-action_forward(Player,World,NewPlayer,NewWorld) :-
-    can_move_forward(Player,World,NewCoordX,NewCoordY),
-    move_player_at(Player,World,NewCoordX,NewCoordY,NewPlayer,NewWorld).
-
-%action_turn_left(+Player,+World,-Player,-World)
-action_turn_left(Player,World,NewPlayer,NewWorld) :-
-    Player = [X,Y,Xh:Yh,ArrowCount,GoldCount,IsDead],
-    turn_ccw(Xh:Yh,NXh:NYh),
-    NewPlayer = [X,Y,NXh:NYh,ArrowCount,GoldCount,IsDead],
-    NewWorld = World.
-
-%action_turn_right(+Player,+World,-Player,-World)
-action_turn_right(Player,World,NewPlayer,NewWorld) :-
-    Player = [X,Y,Xh:Yh,ArrowCount,GoldCount,IsDead],
-    turn_cw(Xh:Yh,NXh:NYh),
-    NewPlayer = [X,Y,NXh:NYh,ArrowCount,GoldCount,IsDead],
-    NewWorld = World.
-
-%action_grab(+Player,+World,-Player,-World)
-action_grab(Player,World,NewPlayer,NewWorld) :-
-    Player = [CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead],
-    World = [_,_,WorldMap],
-    (cell_contains_gold(WorldMap,CoordX,CoordY)
-     -> NewGoldCount is GoldCount + 1 ; NewGoldCount = GoldCount),
-    NewPlayer = [CoordX,CoordY,Heading,ArrowCount,NewGoldCount,IsDead],
-    NewWorld = World.
-
-%action_shoot(+Player,+World,-Player,-World)
-action_shoot(Player,World,NewPlayer,NewWorld) :-
-    %TODO: arrow magic
-    NewPlayer = Player,
-    NewWorld = World.
-
-%action_climb(+Player,+World,-Player,-World)
-action_climb(Player,_,_,_) :-
-    Player = [X,Y,_,_,_,_],
-    X == 1, Y == 1.
-*/
 dump_actions([]).
 
 dump_actions([Action]) :-
@@ -387,7 +341,6 @@ check_game_state(World,Player,Score,Actions,ActionsReturn,Result) :-
     Player = [CoordX,CoordY,_,_,GoldCount,_],
     CoordX = 1, CoordY = 1,
     GoldCount = 1,
-    %cell_contains_gold(WorldMap,CoordX,CoordY),
     writeln("\e[37;1m You won! \e[0m"),
     write("\e[32;1m"),
     write("Score: "),writeln(Score),
@@ -473,7 +426,6 @@ find_path(World,Player,Score,Actions,ActionsReturn) :-
             replace(WorldMap, Index, Xg:Yg-no_gold, NewWorldMap),
             NewPlayer = [X,Y,P1,P2,1,P4],
             NewActions = [Actions|X:Y-grab-1]
-            %writeln("\e[32;1m gold picked up \e[0m")
         ) ; NewPlayer = Player, NewWorldMap = WorldMap,NewActions = Actions),
     NewWorld = [Width,Height,NewWorldMap],
     check_game_state(NewWorld,NewPlayer,Score,NewActions,ActionsReturn,Result),
@@ -492,24 +444,4 @@ setup :-
     setup_variables,
     setup_world,
     get_world_map(World),
-    validate_world(World). 
-
-run :-
-    writeln("Setting up wumpas world"), 
-    setup,
-    writeln("setup done"), 
-    get_world_map(World),
-    writeln(World), 
-    move_player_at(2, 2),
-    cell_contains_player(World,Xp,Yp),
-    cell_contains_wumpus(World,Xw,Yw),
-    writeln(Xp), writeln(Yp),
-    writeln(Xw), writeln(Yw).
-
-dump_game_status :-
-    write("\e[33;1m"),
-    dump_world,
-    dump_score,
-    dump_player,
-    dump_player_state,
-    write("\e[0m").
+    validate_world(World).
