@@ -183,13 +183,18 @@ adjacent(X1:Y1,X2:Y2) :-
     adjacent(W,H,X1:Y1,X2:Y2).
 
 /** turns */
-turn_cw( 1:0 , 0:-1).
-turn_cw( 0:-1,-1:0 ).
-turn_cw( -1:0, 0:1 ).
-turn_cw( 0:1 , 1:0 ).
+turn_cw( right , down).
+turn_cw( down, left).
+turn_cw( left, up).
+turn_cw( up, right).
 
 turn_ccw(A, B) :-
     turn_cw(B, A).
+
+dir_to_str(1,0, right).
+dir_to_str(0,1, up).
+dir_to_str(-1,0, left).
+dir_to_str(0,-1, down).
 
 %cell_contains_something(+World, +X, +Y)
 
@@ -314,13 +319,6 @@ trace_an_arrow(World,Player,NewWorld) :-
 
 /** Player actions */
 
-%action_forward(+Player,+World,-Player,-World)
-/**action_forward(Player,World,NewPlayer,NewWorld) :-
-    \+ can_move_forward(Player,World,_,_),
-    NewPlayer = Player,
-    NewWorld = World. 
-*/
-
 action_forward(Player,World,NewPlayer,NewWorld) :-
     can_move_forward(Player,World,NewCoordX,NewCoordY),
     move_player_at(Player,World,NewCoordX,NewCoordY,NewPlayer,NewWorld).
@@ -360,8 +358,6 @@ action_climb(Player,_,_,_) :-
     X == 1, Y == 1.
 
 dump_actions([]).
-%dump_actions([_]).
-%dump_actions([_|_]).
 
 dump_actions([Action]) :-
     write(Action).
@@ -394,7 +390,6 @@ check_game_state(World,Player,Score,Actions,ActionsReturn,Result) :-
     Player = [CoordX,CoordY,_,_,GoldCount,_],
     CoordX = 1, CoordY = 1,
     GoldCount = 1,
-    %cell_contains_gold(WorldMap,CoordX,CoordY),
     writeln("\e[37;1m You won! \e[0m"),
     write("\e[32;1m"),
     write("Score: "),writeln(Score),
@@ -409,36 +404,6 @@ check_game_state(World,Player,Score,Actions,ActionsReturn,Result) :-
 %find_path(+World,+Player,+Score,+Actions)
 :- dynamic find_path/4.
 
-/*find_path_forward(World,Player,Score,Actions,ActionsReturn) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-forward-GoldCount,_)),
-    action_forward(Player,World,NewPlayer,NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-forward-GoldCount], NewActions1),
-    append(NewActions1, [X:Y-visited-GoldCount], NewActions),
-    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
-
-find_path_left(World,Player,Score,Actions,ActionsReturn) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-visited-GoldCount,_)),
-    %not(index(Actions,X:Y-forward-GoldCount,_)),
-    %not(index(Actions,X:Y-turn_left-GoldCount,_)),
-    not(index(Actions,X:Y-turn_right-GoldCount,_)),
-    action_turn_left(Player,World,NewPlayer,NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-turn_left-GoldCount], NewActions),
-    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
-
-find_path_right(World,Player,Score,Actions,ActionsReturn) :-
-    Player = [X,Y,_,_,GoldCount,_],
-    not(index(Actions,X:Y-visited-GoldCount,_)),
-    %not(index(Actions,X:Y-turn_right-GoldCount,_)),
-    not(index(Actions,X:Y-turn_left-GoldCount,_)),
-    action_turn_right(Player,World,NewPlayer,NewWorld),
-    NewScore is Score - 1,
-    append(Actions, [X:Y-turn_right-GoldCount], NewActions),
-    find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).*/
-
 find_path_by_move(World,Player,Score,Actions,ActionsReturn,DX,DY) :-
     Player = [X,Y,Hx:Hy,_,GoldCount,_],
     not(index(Actions,X:Y-forward-GoldCount,_)),
@@ -446,8 +411,7 @@ find_path_by_move(World,Player,Score,Actions,ActionsReturn,DX,DY) :-
     \+ perceive_bump(World, NewX, NewY),
     (
         (
-            (Hx = -DX, Hy = DY) ; (Hx = DX, Hy = -DY) ;
-            (-Hx = DX, Hy = DY) ; (Hx = DX, -Hy = DY)
+            (dir_to_str(Hx,Hy,Hdir), dir_to_str(DX,DY,Ddir), turn_cw(Hdir,D),turn_cw(D,Ddir))
         ) -> (
             append(Actions, [X:Y-turn_right-GoldCount,
                 X:Y-turn_right-GoldCount], Actions2),
@@ -456,7 +420,7 @@ find_path_by_move(World,Player,Score,Actions,ActionsReturn,DX,DY) :-
             Actions2 = Actions,
             NewScore is Score - 1 )
          ;(  
-            ((turn_cw(Hx:Hy,DX:DY) ; turn_ccw(DX:DY,Hx:Hy)) ->
+            ( (dir_to_str(Hx,Hy,Hdir), dir_to_str(DX,DY,Ddir), turn_cw(Hdir,Ddir)) ->
                 Dir = turn_right ; Dir = turn_left),
             append(Actions, [X:Y-Dir-GoldCount], Actions2),
             NewScore is Score - 2)
@@ -510,24 +474,14 @@ find_path(World,Player,Score,Actions,ActionsReturn) :-
     (cell_contains_gold(WorldMap,X,Y) -> (
             index(WorldMap, Xg:Yg-gold, Index),
             replace(WorldMap, Index, Xg:Yg-no_gold, NewWorldMap),
-            NewPlayer = [X,Y,P1,P2,1,P4]
+            NewPlayer = [X,Y,P1,P2,1,P4],
+            append(Actions,[X:Y-grab],NewActions)
             %writeln("\e[32;1m gold picked up \e[0m")
-        ) ; NewPlayer = Player, NewWorldMap = WorldMap),
+        ) ; NewPlayer = Player, NewWorldMap = WorldMap, NewActions = Actions),
     NewWorld = [Width,Height,NewWorldMap],
-    check_game_state(NewWorld,NewPlayer,Score,Actions,ActionsReturn,Result),
+    check_game_state(NewWorld,NewPlayer,Score,NewActions,ActionsReturn,Result),
     Result = continue,
-    %write("["),write(Score),write("]:"),
-    %dump_world(NewWorld),
-    %dump_player(NewPlayer),
-    %dump_actions(Actions),
-    %writeln(""),
-    find_path_by_action(NewWorld,NewPlayer,Score,Actions,ActionsReturn).
-    /*(
-        find_path_up(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
-        find_path_down(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
-        find_path_right(NewWorld,NewPlayer,Score,Actions,ActionsReturn);
-        find_path_left(NewWorld,NewPlayer,Score,Actions,ActionsReturn)
-    ) -> true ; false.*/
+    find_path_by_action(NewWorld,NewPlayer,Score,NewActions,ActionsReturn).
 
 %find_path(World) :-
 find_path_on_current_state(Actions) :-
