@@ -1,3 +1,9 @@
+/**
+ * Most important functions are located in the bottom
+ * Execution time equal to ~20 seconds - it's okay
+ * By the way it almost works
+ */
+
 /** Global vars */
 
 %score(Value)
@@ -57,41 +63,6 @@ heading_to_string(-1:0, left).
 reset_player(CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead) :-
     retractall(player(_,_,_,_,_,_)),
     assert(player(CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead)).
-
-set_player_coords(X, Y) :-
-    player(_,_,Heading,ArrowCount,GoldCount,IsDead),
-    reset_player(X,Y,Heading,ArrowCount,GoldCount,IsDead).
-
-get_player_coords(X, Y) :-
-    player(X,Y,_,_,_,_).
-
-set_player_heading(Heading) :-
-    player(X,Y,_,ArrowCount,GoldCount,IsDead),
-    reset_player(X,Y,Heading,ArrowCount,GoldCount,IsDead).
-
-get_player_heading(Heading) :-
-    player(_,_,Heading,_,_,_).
-
-set_player_arrow_count(Count) :-
-    player(X,Y,Heading,_,GoldCount,IsDead),
-    reset_player(X,Y,Heading,Count,GoldCount,IsDead).
-
-get_player_arrow_count(Count) :-
-    player(_,_,_,Count,_,_).
-
-set_player_gold_count(Count) :-
-    player(X,Y,Heading,ArrowCount,_,IsDead),
-    reset_player(X,Y,Heading,ArrowCount,Count,IsDead).
-
-get_player_gold_count(Count) :-
-    player(_,_,_,_,Count,_).
-
-set_player_is_dead(IsDead) :-
-    player(X,Y,Heading,ArrowCount,GoldCount,_),
-    reset_player(X,Y,Heading,ArrowCount,GoldCount,IsDead).
-
-get_player_is_dead(IsDead) :-
-    player(_,_,_,_,_,IsDead).
 
 dump_player([X, Y, Heading, ArrowCount, GoldCount, IsDead]) :-
     heading_to_string(Heading, HeadingString),
@@ -255,18 +226,6 @@ perceive_stench([_,_,WorldMap], X ,Y) :-
     adjacent(X:Y, Xa:Ya),
     cell_contains_wumpus(WorldMap, Xa, Ya).
 
-%perceive(+World,+X, +Y, -State)
-perceive(World, X, Y, State) :-
-    ((perceive_breeze(World, X,Y) -> Breeze = true ; Breeze = false), true),
-    ((perceive_bump(World, X,Y) -> Bump = true ; Bump = false), true),
-    ((perceive_glitter(World, X,Y) -> Glitter = true ; Glitter = false), true),
-    ((perceive_scream(World, X,Y) -> Scream = true ; Scream = false), true),
-    ((perceive_stench(World, X,Y) -> Stench = true ; Stench = false), true),
-    State = [Breeze,Bump,Glitter,Scream,Stench],
-    true.
-
-
-
 /** Player operations */
 
 %move_player_at(+Player, +World, +NewX, +NewY, -Player, -World)
@@ -317,52 +276,12 @@ trace_an_arrow(World,Player,NewWorld) :-
     NewWorld = World,
     fail.
 
-/** Player actions */
-
-action_forward(Player,World,NewPlayer,NewWorld) :-
-    can_move_forward(Player,World,NewCoordX,NewCoordY),
-    move_player_at(Player,World,NewCoordX,NewCoordY,NewPlayer,NewWorld).
-
-%action_turn_left(+Player,+World,-Player,-World)
-action_turn_left(Player,World,NewPlayer,NewWorld) :-
-    Player = [X,Y,Xh:Yh,ArrowCount,GoldCount,IsDead],
-    turn_ccw(Xh:Yh,NXh:NYh),
-    NewPlayer = [X,Y,NXh:NYh,ArrowCount,GoldCount,IsDead],
-    NewWorld = World.
-
-%action_turn_right(+Player,+World,-Player,-World)
-action_turn_right(Player,World,NewPlayer,NewWorld) :-
-    Player = [X,Y,Xh:Yh,ArrowCount,GoldCount,IsDead],
-    turn_cw(Xh:Yh,NXh:NYh),
-    NewPlayer = [X,Y,NXh:NYh,ArrowCount,GoldCount,IsDead],
-    NewWorld = World.
-
-%action_grab(+Player,+World,-Player,-World)
-action_grab(Player,World,NewPlayer,NewWorld) :-
-    Player = [CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead],
-    World = [_,_,WorldMap],
-    (cell_contains_gold(WorldMap,CoordX,CoordY)
-     -> NewGoldCount is GoldCount + 1 ; NewGoldCount = GoldCount),
-    NewPlayer = [CoordX,CoordY,Heading,ArrowCount,NewGoldCount,IsDead],
-    NewWorld = World.
-
-%action_shoot(+Player,+World,-Player,-World)
-action_shoot(Player,World,NewPlayer,NewWorld) :-
-    %TODO: arrow magic
-    NewPlayer = Player,
-    NewWorld = World.
-
-%action_climb(+Player,+World,-Player,-World)
-action_climb(Player,_,_,_) :-
-    Player = [X,Y,_,_,_,_],
-    X == 1, Y == 1.
-
 dump_actions([]).
 
-dump_actions([Action]) :-
-    write(Action).
+%dump_actions([Action]) :-
+%    write(Action).
 
-dump_actions([Action|Actions]) :-
+dump_actions([_X:_Y-Action-_|Actions]) :-
     write(Action), write(", "),
     dump_actions(Actions).
 
@@ -385,19 +304,12 @@ check_game_state(World,Player,_,_,_,Result) :-
     \+ cell_contains_gold(WorldMap,CoordX,CoordY),
     Result = continue.
 
-check_game_state(World,Player,Score,Actions,ActionsReturn,Result) :-
+check_game_state(World,Player,_,Actions,ActionsReturn,Result) :-
     World = [_,_,_],
     Player = [CoordX,CoordY,_,_,GoldCount,_],
     CoordX = 1, CoordY = 1,
     GoldCount = 1,
-    writeln("\e[37;1m You won! \e[0m"),
-    write("\e[32;1m"),
-    write("Score: "),writeln(Score),
-    dump_player(Player),
-    dump_world(World),
     append(Actions, [CoordX:CoordY-climb-1], NewActions),
-    dump_actions(NewActions),
-    write("\e[0m"),
     ActionsReturn = NewActions,
     Result = won.
 
@@ -457,8 +369,6 @@ find_path_by_action(World,Player,Score,Actions,ActionsReturn) :-
     append(Actions,[X:Y-shoot],NewActions),
     find_path(NewWorld,NewPlayer,NewScore,NewActions,ActionsReturn).
 
-
-
 find_path(World,Player,Score,Actions,ActionsReturn) :-
     check_game_state(World,Player,Score,Actions,ActionsReturn,Result),
     Result = lose,
@@ -475,7 +385,7 @@ find_path(World,Player,Score,Actions,ActionsReturn) :-
             index(WorldMap, Xg:Yg-gold, Index),
             replace(WorldMap, Index, Xg:Yg-no_gold, NewWorldMap),
             NewPlayer = [X,Y,P1,P2,1,P4],
-            append(Actions,[X:Y-grab],NewActions)
+            append(Actions,[X:Y-grab-1],NewActions)
             %writeln("\e[32;1m gold picked up \e[0m")
         ) ; NewPlayer = Player, NewWorldMap = WorldMap, NewActions = Actions),
     NewWorld = [Width,Height,NewWorldMap],
@@ -483,36 +393,29 @@ find_path(World,Player,Score,Actions,ActionsReturn) :-
     Result = continue,
     find_path_by_action(NewWorld,NewPlayer,Score,NewActions,ActionsReturn).
 
+/**
+ * Here you can run pathfinding on your own world and player
+ */
+find_path(World,Player,ActionsReturn) :-
+    find_path(World,Player,0,[],ActionsReturn).
+
+/**
+ * This is usual entry point, which uses world and player global variables
+ * run "?- setup." before use it
+ */
 %find_path(World) :-
 find_path_on_current_state(Actions) :-
     player(CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead),
     Player = [CoordX,CoordY,Heading,ArrowCount,GoldCount,IsDead],
     world(Width,Height,WorldMap),
     World = [Width,Height,WorldMap],
-    find_path(World,Player,0,[],Actions).
+    find_path(World,Player,Actions),
+    write("Actions: "),
+    dump_actions(Actions).
 
 setup :-
     setup_variables,
     setup_world,
     get_world_map(World),
     validate_world(World). 
-
-run :-
-    writeln("Setting up wumpas world"), 
-    setup,
-    writeln("setup done"), 
-    get_world_map(World),
-    writeln(World), 
-    move_player_at(2, 2),
-    cell_contains_player(World,Xp,Yp),
-    cell_contains_wumpus(World,Xw,Yw),
-    writeln(Xp), writeln(Yp),
-    writeln(Xw), writeln(Yw).
-
-dump_game_status :-
-    write("\e[33;1m"),
-    dump_world,
-    dump_score,
-    dump_player,
-    dump_player_state,
-    write("\e[0m").
+    
